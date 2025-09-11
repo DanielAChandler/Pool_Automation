@@ -1,0 +1,1599 @@
+### version: 1.2.2 ###
+###  FULLY WORKING   ###
+########################
+
+# changes from v1.2.1.1:
+# - cleanup unused components
+
+substitutions:
+  name: pool-automation
+  friendly_name: Pool Automation
+  area: "Pool Equipment"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  area: ${area}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+  level: DEBUG
+  # level: WARN
+  logs:
+    text_sensor: ERROR
+
+api:
+  encryption:
+    key: "gicdDBudB0MlR8fPr8ohku5LH8LFkjxx8tYimf6IeTQ="
+
+ota:
+  - platform: esphome
+    id: waveshare_esp32_s3_relay_6ch_ota
+    password: "1dc60a76bb1d3d555bc7c7eb0c58f9a1"
+
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: America/New_York
+    servers:
+      - 172.16.10.1
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+    on_time_sync:
+      - globals.set:
+          id: g_time_synced
+          value: "true"
+      - logger.log: "Time Synced"
+      - lambda: |-
+          auto time_text = id(sntp_time).now().strftime("%H:%M:%S - %d-%m-%Y");
+          ESP_LOGI("TEST", "Time Synced: %s", time_text);
+    on_time:
+      - seconds: /2
+        then:
+          - script.execute: ichlor_on_off_script
+          - script.execute: pump_schedule_check
+          - script.execute: pump_program_check
+          - script.execute: waterfall_open_close
+          - script.execute: pool_heating_check
+
+wifi:
+  ssid: !secret wifi_ssid #_2G
+  password: !secret wifi_password #_2G
+  manual_ip:
+    static_ip: 172.16.10.130
+    gateway: 172.16.10.1
+    subnet: 255.255.255.0
+    dns1: 172.16.10.15
+  domain: .deprez.biz
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Pool Automation Hotspot"
+    password: "REDACTED"
+
+captive_portal:
+
+esp32_ble_tracker:
+  on_ble_advertise:
+    - mac_address: "EE:2E:02:46:4C:73"
+      then:
+        - lambda: |-
+            for (auto data : x.get_manufacturer_datas()) {
+                if (data.data.size() == 12) {
+                    float temperature = (float(data.data[8] & 0x0F) * 0.1) + float(data.data[9] & 0x7F);
+                    if (!(data.data[9] & 0x80)) {
+                        temperature = -temperature;
+                    }
+                    id(pool_switchbot_temperature_c).publish_state(temperature);
+                    // id(pool_switchbot_humidity).publish_state(data.data[10] & 0x7F);
+                }
+            }
+            for (auto data : x.get_service_datas()) {
+                if (data.data.size() == 3) {
+                    int8_t battery_pct = data.data[2] & 0x7F;
+                    id(pool_switchbot_battery).publish_state(battery_pct);
+                }
+            }
+
+external_components:
+  - source: github://bdeprez/Pool_Automation@main
+    components: [pentair_intelliflo]
+    refresh: 0s
+
+# for RS-485
+uart:
+  - id: uart_intelliflo
+    tx_pin: GPIO17
+    rx_pin: GPIO18
+    baud_rate: 9600
+  - id: uart_intellichlor
+    tx_pin: GPIO6
+    rx_pin: GPIO5
+    baud_rate: 9600
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+
+  # 4 channel ADC
+ads1115:
+  - address: 0x48
+
+pentair_intelliflo:
+  uart_id: uart_intelliflo
+  id: pentairpump
+
+web_server:
+  port: 80
+  version: 3
+  auth:
+    username: "REDACTED"
+    password: "REDACTED"
+  sorting_groups:
+    - id: sorting_group_temperatures
+      name: "Temperatures"
+      sorting_weight: -10
+    - id: sorting_group_heating
+      name: "Heating"
+      sorting_weight: -9
+    - id: sorting_group_pump_status
+      name: "Pump Status"
+      sorting_weight: -20
+    - id: sorting_group_pump_schedule_1
+      name: "Pump Schedule 1"
+      sorting_weight: -19
+    - id: sorting_group_pump_schedule_2
+      name: "Pump Schedule 2"
+      sorting_weight: -18
+    - id: sorting_group_freezeprotect
+      name: "Pump Freeze Protect"
+      sorting_weight: -15
+    - id: sorting_group_ichlor
+      name: "iChlor"
+      sorting_weight: -10
+    - id: sorting_group_waterfall
+      name: "Waterfall"
+      sorting_weight: -5
+    - id: sorting_group_light
+      name: "Light"
+      sorting_weight: -4
+
+globals:
+  - id: g_time_synced
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  # pump mode: 0: inactive, 1: sched 1, 2: sched 2, DISABLED: 3: eggtimer, 4: freezeprotect, (9:always_on)
+  - id: g_pump_mode
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: g_current_pump_program
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: g_previous_pump_program
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: g_new_pump_program
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: g_program_change_in_mode
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: g_program_to_send_to_pump
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: g_should_pump_be_running
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: g_should_pump_be_running_millis
+    type: unsigned long
+    restore_value: no
+    initial_value: "0"
+  - id: g_break_out_of_switch
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: g_should_pump_be_started
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: g_should_pump_be_started_millis
+    type: unsigned long
+    restore_value: no
+    initial_value: "0"
+  - id: g_should_pump_be_stopped
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: g_should_pump_be_stopped_millis
+    type: unsigned long
+    restore_value: no
+    initial_value: "0" 
+  - id: g_pump_started_running_millis
+    type: unsigned long
+    restore_value: no
+    initial_value: "0"
+  - id: g_pump_stopped_running_millis
+    type: unsigned long
+    restore_value: no
+    initial_value: "0"    
+  - id: g_schedule_1_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: g_schedule_1_last_state
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+  - id: g_schedule_2_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: g_schedule_2_last_state
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+  - id: g_freeze_protect_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: g_freeze_protect_last_state
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+  - id: g_pump_start_stop_delay
+    type: int
+    restore_value: no
+    initial_value: "10000"
+  - id: g_ichlor_state_before_freeze_protect
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+
+sensor:
+  - platform: uptime
+    type: timestamp
+    name: Uptime Sensor
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: diagnostic
+
+  # Reports the WiFi signal strength in %
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Strength"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: diagnostic
+
+  - platform: template
+    name: "Outdoor Temperature °C"
+    id: pool_switchbot_temperature_c
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    icon: "mdi:thermometer"
+    web_server:
+      sorting_group_id: sorting_group_freezeprotect
+      sorting_weight: 1
+
+  - platform: template
+    name: "Pool Switchbot Battery"
+    id: pool_switchbot_battery
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    icon: "mdi:battery"
+
+  - platform: pentair_intelliflo
+    power:
+      id: pump_power
+      name: "Power"
+      icon: "mdi:flash"
+      web_server:
+        sorting_group_id: sorting_group_pump_status
+        sorting_weight: 4      
+    rpm:
+      id: pump_rpm
+      name: "Pump RPM"
+      unit_of_measurement: 'RPM'
+      icon: "mdi:refresh"
+      web_server:
+        sorting_group_id: sorting_group_pump_status
+        sorting_weight: 5
+    flow:
+      id: pump_flow_m3h
+      name: "Flow m³/h"
+      unit_of_measurement: "m³/h"
+      icon: "mdi:waves-arrow-right"
+      web_server:
+        sorting_group_id: sorting_group_pump_status
+        sorting_weight: 6
+
+  - platform: copy
+    source_id: pump_flow_m3h
+    id: pump_flow_gpm
+    name: "Flow gpm"
+    icon: "mdi:waves-arrow-right"
+    filters:
+      - lambda: return (x * 4.40287);
+    unit_of_measurement: "gal/min"
+    accuracy_decimals: 1
+    web_server:
+      sorting_group_id: sorting_group_pump_status
+      sorting_weight: 7
+
+  #Pool sensor voltages
+  - platform: ads1115
+    multiplexer: 'A0_GND'
+    gain: 4.096
+    update_interval: 30s
+    id: pool_voltage
+    name: "Pool Sensor Voltage"
+  - platform: ads1115
+    multiplexer: 'A1_GND'
+    gain: 4.096
+    update_interval: 30s
+    id: roof_voltage
+    name: "Roof Sensor Voltage"
+
+  #Pool sensor resistance
+  - platform: resistance
+    id: pool_resistance
+    sensor: pool_voltage
+    configuration: DOWNSTREAM
+    resistor: 10.0kOhm
+    #resistor: 9.6kOhm
+    name: Pool Resistance
+
+  - platform: resistance
+    id: roof_resistance
+    sensor: roof_voltage
+    configuration: DOWNSTREAM
+    resistor: 10.0kOhm
+    #resistor: 9.6kOhm
+    name: Roof Resistance
+
+  #Pool sensor temperatures
+  - platform: ntc
+    id: pool_temp_c
+    name: Pool Temperature C
+    unit_of_measurement: "°C"
+    sensor: pool_resistance
+    calibration:
+      - 10.0kOhm -> 25°C
+      - 32.648kOhm -> 0°C
+      - 15.711kOhm -> 15°C
+    icon: "mdi:pool-thermometer"
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 1
+
+  - platform: copy
+    source_id: pool_temp_c
+    id: pool_temp_f
+    name: Pool Temperature F
+    unit_of_measurement: "°F"
+    icon: "mdi:pool-thermometer"
+    filters:
+      - lambda: return (x * 9/5) + 32;
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 3 
+
+  - platform: ntc
+    id: roof_temp_c
+    name: Roof Temperature C
+    sensor: roof_resistance
+    unit_of_measurement: "°C"
+    icon: "mdi:home-thermometer-outline"
+    calibration:
+      - 10.0kOhm -> 25°C
+      - 32.648kOhm -> 0°C
+      - 15.711kOhm -> 15°C
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 2 
+
+  - platform: copy
+    source_id: roof_temp_c
+    id: roof_temp_f
+    name: Roof Temperature F
+    unit_of_measurement: "°F"
+    icon: "mdi:home-thermometer-outline"
+    filters: 
+       - lambda: return (x * 9/5) + 32;
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 4 
+
+binary_sensor:
+  # pump running state from pump
+  - platform: pentair_intelliflo
+    running:
+      name: "Pump Running"
+      id: pump_running
+
+  # pump running status copied from pump
+  - platform: copy 
+    source_id: pump_running
+    name: "Pump Status"
+    id: pump_running_status
+    icon: "mdi:pump"
+    on_state: 
+      then:
+      - lambda: |-
+          if (id(pump_running).state == true) {
+            id(g_pump_started_running_millis) = millis();
+            if (id(ichlor_override).state == true && id(ichlor_relay).state == false) {
+              id(ichlor_relay).turn_on();
+            }
+          }
+          else {
+            id(g_pump_stopped_running_millis) = millis();
+          }
+    web_server:
+      sorting_group_id: sorting_group_pump_status
+      sorting_weight: 2
+  - platform: template
+    id: waterfall_state
+    name: "Waterfall"
+    icon: "mdi:waterfall"
+    web_server:
+      sorting_group_id: sorting_group_waterfall
+      sorting_weight: 2
+  - platform: template
+    id: heating_state
+    name: "Heating"
+    icon: "mdi:solar-power-variant"
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 8
+  - platform: template
+    id: ichlor_state
+    name: "iChlor"
+    icon: "mdi:fuel-cell"
+    web_server:
+      sorting_group_id: sorting_group_ichlor
+      sorting_weight: 2
+
+number:
+  # Pool Heating - target temperature
+  - platform: template
+    name: Target Temperature °C
+    optimistic: True
+    restore_value: True
+    initial_value: 31
+    id: target_temperature
+    update_interval: never
+    min_value: 25
+    max_value: 36
+    step: 1
+    device_class: temperature
+    unit_of_measurement: °C
+    icon: mdi:coolant-temperature
+    mode: SLIDER
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 6    
+
+  # Freeze Protect  - Start temperature
+  - platform: template
+    name: Freeze Protect Temp
+    icon: "mdi:snowflake-thermometer"
+    optimistic: True
+    restore_value: True
+    initial_value: 1.5
+    id: freeze_protect_temperature
+    update_interval: never
+    min_value: 0
+    max_value: 5
+    step: 0.1
+    device_class: temperature
+    unit_of_measurement: °C
+    mode: SLIDER
+    web_server:
+      sorting_group_id: sorting_group_freezeprotect
+      sorting_weight: 3
+
+  # Pool Roof Temp Differential for heating
+  - platform: template
+    id: roof_pool_diff
+    name: Roof Pool Temp Difference
+    icon: "mdi:compare-vertical"
+    optimistic: True
+    restore_value: True
+    initial_value: 10
+    update_interval: never
+    min_value: 2
+    max_value: 30
+    step: 1
+    mode: slider
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 9
+
+  # iChlor ON/OFF delay
+  - platform: template
+    id: ichlor_on_off_delay
+    name: iChlor On Off Delay
+    icon: "mdi:compare-vertical"
+    optimistic: True
+    restore_value: True
+    initial_value: 10
+    update_interval: never
+    min_value: 1
+    max_value: 60
+    step: 1
+    mode: slider
+    web_server:
+      sorting_group_id: sorting_group_ichlor
+      sorting_weight: 3
+
+###DATETIME TIMES###
+datetime:
+  - platform: template
+    id: pump_sched_1_start
+    type: time
+    name: Schedule 1 Start Time
+    icon: "mdi:clock-start"
+    optimistic: yes
+    initial_value: "08:00:00"
+    restore_value: true
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_1
+      sorting_weight: 2    
+  - platform: template
+    id: pump_sched_1_end
+    type: time
+    name: Schedule 1 End Time
+    icon: "mdi:clock-end"
+    optimistic: yes
+    initial_value: "18:00:00"
+    restore_value: true
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_1
+      sorting_weight: 3
+  - platform: template
+    id: pump_sched_2_start
+    type: time
+    name: Schedule 2 Start Time
+    icon: "mdi:clock-start"
+    optimistic: yes
+    initial_value: "08:00:00"
+    restore_value: true
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_2
+      sorting_weight: 6
+  - platform: template
+    id: pump_sched_2_end
+    type: time
+    name: Schedule 2 End Time
+    icon: "mdi:clock-end"
+    optimistic: yes
+    initial_value: "18:00:00"
+    restore_value: true
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_2
+      sorting_weight: 7
+  - platform: template
+    id: waterfall_sched_start
+    type: time
+    name: Waterfall Start Time
+    icon: "mdi:clock-start"
+    optimistic: yes
+    initial_value: "08:00:00"
+    restore_value: true
+    web_server:
+      sorting_group_id: sorting_group_waterfall
+      sorting_weight: 4
+  - platform: template
+    id: waterfall_sched_end
+    type: time
+    name: Waterfall End Time
+    icon: "mdi:clock-end"
+    optimistic: yes
+    initial_value: "08:05:00"
+    restore_value: true    
+    web_server:
+      sorting_group_id: sorting_group_waterfall
+      sorting_weight: 5
+
+button:
+  - platform: restart
+    name: "Restart"
+    id: restart_button
+    entity_category: config
+
+switch:
+  # Pump enabled/disabled
+  - platform: template
+    id: pump_enabled
+    name: "Pump Enabled"
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: True
+    icon: "mdi:power"
+    web_server:
+      sorting_group_id: sorting_group_pump_status
+      sorting_weight: 1
+    on_turn_off:
+      then:
+      - lambda: |-
+          id(g_pump_mode) = 0;
+          id(g_schedule_1_active) = false;
+          id(g_schedule_2_active) = false;
+          id(g_freeze_protect_active) = false;
+          if(id(heater_relay).state == true) {
+            id(heater_relay).turn_off();
+          }
+          id(pentairpump).stop();
+
+  # Schedule 1 enabled
+  - platform: template
+    id: schedule_1_enabled
+    name: "Schedule 1 Enabled"
+    icon: "mdi:power"
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_1
+      sorting_weight: 1
+
+  # Schedule 2 enabled
+  - platform: template
+    id: schedule_2_enabled
+    name: "Schedule 2 Enabled"
+    icon: "mdi:power"
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_2
+      sorting_weight: 5
+
+  # Freeze Protect enabled
+  - platform: template
+    id: freeze_protect_enabled
+    name: "Freeze Protect Enabled"
+    icon: "mdi:power"
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_off:
+      then:
+      - lambda: |-
+          if(id(g_pump_mode)==4) {
+            // freeze protect is running while it's disabled - stop the program
+            // set pump mode to 0 inactive
+            id(g_pump_mode) = 0;
+            // set that pump should not be running
+            id(g_freeze_protect_active) = false;
+            id(g_should_pump_be_stopped) = true;
+            id(g_should_pump_be_stopped_millis) = millis();
+            id(g_should_pump_be_started) = false;   
+          }
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_freezeprotect
+      sorting_weight: 2
+
+    # ichlor enabled
+  - platform: template
+    id: ichlor_enabled
+    name: "iChlor enabled"
+    icon: "mdi:power"
+    on_turn_off:
+      - switch.turn_off: ichlor_relay
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_ichlor
+      sorting_weight: 1
+
+    # ichlor line 1 & 2
+  - platform: gpio
+    pin:
+      number: GPIO45
+      ignore_strapping_warning: true
+    id: relay5
+    name: iChlor L2
+    internal: True
+  - platform: gpio
+    pin:
+      number: GPIO46
+      ignore_strapping_warning: true
+    id: relay6
+    name: iChlor L1
+    internal: True
+
+    # iChlor combined relay switch
+  - platform: template
+    id: ichlor_relay
+    name: "iChlor Relay"
+    on_turn_on:
+      - switch.turn_on: relay5
+      - switch.turn_on: relay6
+      - lambda: |-
+          id(ichlor_state).publish_state(true);
+    on_turn_off:
+      - switch.turn_off: relay5
+      - switch.turn_off: relay6
+      - lambda: |-
+          id(ichlor_state).publish_state(false);
+    restore_mode: ALWAYS_OFF
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_ichlor
+      sorting_weight: 5
+
+  # iChlor on during freeze protect
+  - platform: template
+    id: ichlor_enabled_during_freeze_protect
+    name: "iChlor on in freeze protect"
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: True
+    icon: "mdi:fuel-cell"
+    web_server:
+      sorting_group_id: sorting_group_freezeprotect
+      sorting_weight: 9
+
+    # ichlor override
+  - platform: template
+    id: ichlor_override
+    name: "iChlor Override"
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_ichlor
+      sorting_weight: 4
+
+  # Switch to enable / disable heating
+  - platform: template
+    id: heating_enabled
+    name: "Heating Enabled"
+    icon: "mdi:power"
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_ON
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 5
+
+  # Heater Relay Switch
+  - platform: gpio
+    pin: GPIO2
+    id: heater_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: True
+    on_turn_on: 
+      then:
+        - lambda: |-
+            id(heating_state).publish_state(true);
+    on_turn_off: 
+      then:
+        - lambda: |-
+            id(heating_state).publish_state(false);
+
+  # Waterfall Relay Switch
+  - platform: gpio
+    pin: GPIO41
+    id: waterfall_relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    internal: True
+    on_turn_on: 
+      then:
+        - lambda: |-
+            id(waterfall_state).publish_state(true);
+    on_turn_off: 
+      then:
+        - lambda: |-
+            id(waterfall_state).publish_state(false);
+
+  # Switch to enable / disable waterfall
+  - platform: template
+    id: waterfall_enabled
+    name: "Waterfall Enabled"
+    icon: "mdi:power"
+    optimistic: True
+    restore_mode: RESTORE_DEFAULT_OFF
+    web_server:
+      sorting_group_id: sorting_group_waterfall
+      sorting_weight: 1
+
+  # Waterfall Schedule enabled
+  - platform: template
+    id: waterfall_schedule_enabled
+    name: "Waterfall Schedule Enabled"
+    icon: "mdi:clock-time-three-outline"
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_waterfall
+      sorting_weight: 3
+
+  # Waterfall Schedule enabled
+  - platform: template
+    id: waterfall_always_on
+    name: "Waterfall Always On"
+    icon: "mdi:repeat"
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: True
+    web_server:
+      sorting_group_id: sorting_group_waterfall
+      sorting_weight: 6
+
+  # Light Relay Switch
+  - platform: gpio
+    pin: GPIO42
+#  - platform: template
+    id: light_relay
+    name: Light
+    icon: "mdi:lightbulb-on-outline"
+    restore_mode: RESTORE_DEFAULT_OFF
+    web_server:
+      sorting_group_id: sorting_group_light
+      sorting_weight: 10
+
+select:
+  # To select Pump program
+  - platform: template
+    name: Schedule 1 Program
+    id: pump_schedule_1_program
+    icon: "mdi:form-select"
+    options:
+     - "Program 1 (1000 RPM)"
+     - "Program 2 (1600 RPM)"
+     - "Program 3 (2600 RPM)"
+     - "Program 4 (47 GPM)"
+    initial_option: "Program 3 (2600 RPM)"
+    restore_value: True
+    optimistic: true
+    on_value:
+      then:
+      - lambda: |-
+         id(g_new_pump_program) = i+1;
+         id(g_program_change_in_mode) = 1;
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_1
+      sorting_weight: 4
+
+  - platform: template
+    name: Schedule 2 Program
+    id: pump_schedule_2_program
+    icon: "mdi:form-select"
+    options:
+     - "Program 1 (1000 RPM)"
+     - "Program 2 (1600 RPM)"
+     - "Program 3 (2600 RPM)"
+     - "Program 4 (47 GPM)"
+    initial_option: "Program 2 (1600 RPM)"
+    restore_value: True
+    optimistic: true
+    on_value:
+      then:
+      - lambda: |-
+         id(g_new_pump_program) = i+1;
+         id(g_program_change_in_mode) = 2;
+    web_server:
+      sorting_group_id: sorting_group_pump_schedule_2
+      sorting_weight: 8
+
+  # To select Freeze protect program
+  - platform: template
+    name: Freeze Protect Program
+    id: freeze_protect_program
+    icon: "mdi:form-select"
+    options:
+     - "Program 1 (1000 RPM)"
+     - "Program 2 (1600 RPM)"
+     - "Program 3 (2600 RPM)"
+     - "Program 4 (47 GPM)"
+    initial_option: "Program 1 (1000 RPM)"
+    restore_value: True
+    optimistic: true
+    on_value:
+      then:
+      - lambda: |-
+         //auto program = i+1;
+         id(g_new_pump_program) = i+1;
+         id(g_program_change_in_mode) = 4;
+    web_server:
+      sorting_group_id: sorting_group_freezeprotect
+      sorting_weight: 4
+
+  # To select Heater program
+  - platform: template
+    name: Heater Program
+    id: heater_program
+    icon: "mdi:form-select"
+    options:
+     - "Program 1 (1000 RPM)"
+     - "Program 2 (1600 RPM)"
+     - "Program 3 (2600 RPM)"
+     - "Program 4 (47 GPM)"
+    initial_option: "Program 4 (47 GPM)"
+    restore_value: True
+    optimistic: true
+    on_value:
+      then:
+      - lambda: |-
+         //auto program = i+1;
+         id(g_new_pump_program) = i+1;
+         id(g_program_change_in_mode) = 9;
+    web_server:
+      sorting_group_id: sorting_group_heating
+      sorting_weight: 7
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
+    mac_address:
+      name: "Mac Address"
+      entity_category: diagnostic
+
+  # https://esphome.io/components/text_sensor/template.html
+  - platform: template
+    id: pump_mode_text
+    name: Pump Mode
+    icon: mdi:message
+    lambda: |-
+      switch(id(g_pump_mode)) {
+        case 0: return std::string("Inactive");
+        case 1: return std::string("Schedule 1");
+        case 2: return std::string("Schedule 2");
+        case 3: return std::string("Egg Timer");
+        case 4: return std::string("Freeze Protect");
+        //case 5: return std::string("Always On");
+        default: return std::string("No Known Mode");
+      }
+    update_interval: 1s
+    web_server:
+      sorting_group_id: sorting_group_pump_status
+      sorting_weight: 3
+  - platform: template
+    id: pump_program_text
+    name: Pump Program
+    icon: "mdi:information-outline"
+    lambda: |-
+      switch(id(g_current_pump_program)) {
+        case 1: return std::string("Program 1 (1000 RPM)");
+        case 2: return std::string("Program 2 (1600 RPM)");
+        case 3: return std::string("Program 3 (2600 RPM)");
+        case 4: return std::string("Program 4 (47 GPM)");
+        default: return std::string("No program set");
+      }
+    update_interval: 1s
+    web_server:
+      sorting_group_id: sorting_group_pump_status
+      sorting_weight: 3
+
+script:
+  - id: pump_schedule_check
+    then:
+      lambda: |-
+        //if (id(g_time_synced)) {
+          if(id(pump_enabled).state == true) {
+            //ESP_LOGI("TEST", "Doing Pump Mode Check");
+            switch (id(g_pump_mode)) {
+                // (inactive)
+                case 0:
+                  if (id(schedule_1_enabled).state == true) {
+                    // schedule 1 is enabled, run check
+                    //ESP_LOGI("TEST", "Mode 0 doing schedule 1 check");
+                    id(schedule_1_check).execute();
+                    if (id(g_break_out_of_switch) == true) {
+                      id(g_break_out_of_switch) = false;
+                      break;                      
+                    }
+                  }
+                  if (id(schedule_2_enabled).state == true) {
+                    // schedule 2 is enabled, run check
+                    //ESP_LOGI("TEST", "Mode 0 doing schedule 2 check");
+                    id(schedule_2_check).execute();
+                    if (id(g_break_out_of_switch) == true) {
+                      id(g_break_out_of_switch) = false;
+                      break;                      
+                    }
+                  }
+                  if (id(freeze_protect_enabled).state == true) {
+                    //ESP_LOGI("TEST", "Mode 0 doing freeze protect check");
+                    id(freeze_protect_check).execute();
+                  }
+                case 1:
+                  //ESP_LOGI("TEST", "Mode 1 doing schedule 1 check");
+                  id(schedule_1_check).execute();
+                  if (id(g_break_out_of_switch) == true) {
+                    id(g_break_out_of_switch) = false;
+                    break;
+                    }
+                case 2:
+                  //ESP_LOGI("TEST", "Mode 2 doing schedule 2 check");                
+                  id(schedule_2_check).execute();
+                  if (id(g_break_out_of_switch) == true) {
+                    id(g_break_out_of_switch) = false;
+                    break;
+                    }
+                case 3:
+                case 4:
+                  if (id(schedule_1_enabled).state == true) {
+                    // schedule 1 is enabled, run check
+                    //ESP_LOGI("TEST", "Mode 4 doing schedule 1 check");
+                    id(schedule_1_check).execute();
+                    if (id(g_break_out_of_switch) == true) {
+                      id(g_break_out_of_switch) = false;
+                      break;                      
+                    }
+                  }
+                  if (id(schedule_2_enabled).state == true) {
+                    // schedule 2 is enabled, run check
+                    //ESP_LOGI("TEST", "Mode 4 doing schedule 2 check");
+                    id(schedule_2_check).execute();
+                    if (id(g_break_out_of_switch) == true) {
+                      id(g_break_out_of_switch) = false;
+                      break;                      
+                    }
+                  }
+                  if (id(freeze_protect_enabled).state == true) {
+                    //ESP_LOGI("TEST", "Mode 4 doing freeze protect check");
+                    id(freeze_protect_check).execute();
+                  }
+
+            }
+            id(intelliflo_stop_start).execute();
+          }
+          else {
+            // pump is disabled - do nothing
+          }
+        //}
+
+  - id: schedule_1_check
+    then:
+      lambda: |-
+        if (id(schedule_1_enabled).state)
+          {
+            // Schedule 1 is enabled
+            // check if current time is in Schedule 1 window
+            auto current_time = (id(sntp_time).now().hour * 3600) + (id(sntp_time).now().minute * 60) + (id(sntp_time).now().second);
+            auto schedule_start_time_seconds = (id(pump_sched_1_start).hour * 3600) + (id(pump_sched_1_start).minute * 60) + id(pump_sched_1_start).second;
+            auto schedule_end_time_seconds = (id(pump_sched_1_end).hour * 3600) + (id(pump_sched_1_end).minute * 60) + id(pump_sched_1_end).second;
+            if (current_time >= schedule_start_time_seconds && current_time < schedule_end_time_seconds) {
+              // current time is in Schedule 1 window
+              // check if schedule is active
+              if(id(g_schedule_1_active)==true) {
+                // schedule is active, nothing to do
+                }
+              else {
+                //schedule is not active, set schedule and indicate pump should be running
+                id(g_schedule_1_active) = true;
+                id(g_pump_mode) = 1; 
+                  //id(g_should_pump_be_running) = true;
+                  //id(g_should_pump_be_running_millis) = millis();
+                id(g_should_pump_be_started) = true;
+                id(g_should_pump_be_started_millis) = millis();
+                id(g_should_pump_be_stopped) = false;
+                id(g_new_pump_program) = id(pump_schedule_1_program).active_index().value() + 1;
+                id(g_program_change_in_mode) = 1;
+                ESP_LOGI("TEST", "Schedule 1 started");
+              }
+              id(g_break_out_of_switch) = true;
+            }
+            else {
+              // current time is not / no longer in Schedule 1 window
+              // check if schedule is active
+              if (id(g_schedule_1_active)== true) {
+                //schedule is active, disable it and indicate pump should not be running
+                id(g_schedule_1_active) = false;
+                id(g_pump_mode) = 0;
+                  //id(g_should_pump_be_running) = false;
+                  //id(g_should_pump_be_running_millis) = millis();
+                id(g_should_pump_be_stopped) = true;
+                id(g_should_pump_be_stopped_millis) = millis();
+                id(g_should_pump_be_started) = false;
+                ESP_LOGI("TEST", "Schedule 1 ended");
+                }
+              else {
+                // schedule isn't active, so nothing to do
+              }
+            }
+          }
+        else {
+          // schedule 1 is disabled
+          // check if schedule is active
+          if(id(g_schedule_1_active)== true) {
+            // schedule is active, have to disable it
+            id(g_schedule_1_active) = false;
+            id(g_pump_mode) = 0; 
+              //id(g_should_pump_be_running) = false;
+              //id(g_should_pump_be_running_millis) = millis();
+              id(g_should_pump_be_stopped) = true;
+              id(g_should_pump_be_stopped_millis) = millis();
+              id(g_should_pump_be_started) = false;
+            ESP_LOGI("TEST", "Schedule 1 disabled while running");
+            }
+          else {
+            //schedule is not active, nothing to do
+          }
+        }
+
+  - id: schedule_2_check
+    then:
+      lambda: |-
+        if (id(schedule_2_enabled).state)
+          {
+            // Schedule 1 is enabled
+            // check if current time is in Schedule 1 window
+            auto current_time = (id(sntp_time).now().hour * 3600) + (id(sntp_time).now().minute * 60) + (id(sntp_time).now().second);
+            auto schedule_start_time_seconds = (id(pump_sched_2_start).hour * 3600) + (id(pump_sched_2_start).minute * 60) + id(pump_sched_2_start).second;
+            auto schedule_end_time_seconds = (id(pump_sched_2_end).hour * 3600) + (id(pump_sched_2_end).minute * 60) + id(pump_sched_2_end).second;
+            if (current_time >= schedule_start_time_seconds && current_time < schedule_end_time_seconds) {
+              // current time is in Schedule 1 window
+              // check if schedule is active
+              if(id(g_schedule_2_active)==true) {
+                // schedule is active, nothing to do
+                }
+              else {
+                //schedule is not active, set schedule and indicate pump should be running
+                id(g_schedule_2_active) = true;
+                id(g_pump_mode) = 2; 
+                  //id(g_should_pump_be_running) = true;
+                  //id(g_should_pump_be_running_millis) = millis();
+                id(g_should_pump_be_started) = true;
+                id(g_should_pump_be_started_millis) = millis();
+                id(g_should_pump_be_stopped) = false;
+                id(g_new_pump_program) = id(pump_schedule_2_program).active_index().value() + 1;
+                id(g_program_change_in_mode) = 2;
+                ESP_LOGI("TEST", "Schedule 2 started");
+              }
+              id(g_break_out_of_switch) = true;
+            }
+            else {
+              // current time is not / no longer in Schedule 2 window
+              // check if schedule is active
+              if (id(g_schedule_2_active)== true) {
+                //schedule is active, disable it and indicate pump should not be running
+                id(g_schedule_2_active) = false;
+                id(g_pump_mode) = 0;
+                  //id(g_should_pump_be_running) = false;
+                  //id(g_should_pump_be_running_millis) = millis();
+                id(g_should_pump_be_stopped) = true;
+                id(g_should_pump_be_stopped_millis) = millis();
+                id(g_should_pump_be_started) = false;
+                ESP_LOGI("TEST", "Schedule 2 ended");
+                }
+              else {
+                // schedule isn't active, so nothing to do
+              }
+            }
+          }
+        else {
+          // schedule 2 is disabled
+          // check if schedule is active
+          if(id(g_schedule_2_active)== true) {
+            // schedule is active, have to disable it
+            id(g_schedule_2_active) = false;
+            id(g_pump_mode) = 0; 
+              //id(g_should_pump_be_running) = false;
+              //id(g_should_pump_be_running_millis) = millis();
+            id(g_should_pump_be_stopped) = true;
+            id(g_should_pump_be_stopped_millis) = millis();
+            id(g_should_pump_be_started) = false;
+            ESP_LOGI("TEST", "Schedule 2 disabled while running");
+            }
+          else {
+            //schedule is not active, nothing to do
+          }
+        }
+
+  - id: pump_program_check
+    then:
+      lambda:  |-
+        if (id(g_new_pump_program) != 0) {
+          //id(g_program_to_send_to_pump) = 0;
+          int program_to_send_to_pump = 0;
+          int new_pump_program = id(g_new_pump_program);
+          id(g_new_pump_program) = 0;
+          int program_change_in_mode = id(g_program_change_in_mode);
+          id(g_program_change_in_mode) = 0;
+          switch (id(g_pump_mode)) {
+            // pump is inactive
+            case 0:
+              // ignore new program selections because nothing is running so no need for change in current pump mode
+              //id(g_new_pump_program) = 0;
+              //id(g_program_change_in_mode) = 0;
+              break;
+            // pump is running Schedule 1
+            case 1:
+              // if change was done for schedule 1 then update it and then reset
+              if (program_change_in_mode == 1) {
+                // new pump program to be applied in this running mode
+                // send new program to pump
+                program_to_send_to_pump = new_pump_program;
+              }
+              // if change was done for solar heating and it's switched on, then update it and reset
+              else if (program_change_in_mode == 9) {
+                // check is solar heating is on
+                if(id(heater_relay).state == true) {
+                  // set the previous pump program to the current one (so we can reset if when heating switches off)
+                  id(g_previous_pump_program) = id(g_current_pump_program);
+                  // set new program to be sent to pump
+                  program_to_send_to_pump = new_pump_program;
+                }
+                // solar heating is not on so I need to revert to the correct program
+                else { 
+                  program_to_send_to_pump = id(pump_schedule_1_program).active_index().value() + 1;
+                }
+              }
+              else {
+              }
+              break;
+            case 2:
+              // if change was done for schedule 1 then update it and then reset
+              if (program_change_in_mode == 2) {
+                // new pump program to be applied in this running mode
+                // send new program to pump
+                program_to_send_to_pump = new_pump_program;
+              }
+              // if change was done for solar heating and it's switched on, then update it and reset
+              else if (program_change_in_mode == 9) {
+                // check is solar heating is on
+                if(id(heater_relay).state == true) {
+                  // set the previous pump program to the current one (so we can reset if when heating switches off)
+                  id(g_previous_pump_program) = id(g_current_pump_program);
+                  // set new program to be sent to pump
+                  program_to_send_to_pump = new_pump_program;
+                }
+                // solar heating is not on so I need to revert to the correct program
+                else {
+                  program_to_send_to_pump = id(pump_schedule_2_program).active_index().value() + 1;            
+                }
+              }
+              else {
+              }
+              break;
+            case 4:
+              // if change was done for schedule 1 then update it and then reset
+              if (program_change_in_mode == 4) {
+                // new pump program to be applied in this running mode
+                // send new program to pump
+                program_to_send_to_pump = new_pump_program;
+              }
+              // if change was done for solar heating and it's switched on, then update it and reset
+              else if (program_change_in_mode == 9) {
+                // check is solar heating is on
+                if(id(heater_relay).state == true) {
+                  // set the previous pump program to the current one (so we can reset if when heating switches off)
+                  id(g_previous_pump_program) = id(g_current_pump_program);
+                  // set new program to be sent to pump
+                  program_to_send_to_pump = new_pump_program;
+                }
+                // solar heating is not on so I can ignore this change
+                else {
+                  program_to_send_to_pump = id(freeze_protect_program).active_index().value() + 1;              
+                }
+              }
+              else {
+              }
+              break;
+          }
+          // now check if a pump program change is needed
+          if (program_to_send_to_pump != 0) {
+            id(pentairpump).commandLocalProgram(program_to_send_to_pump);
+            id(g_current_pump_program) = program_to_send_to_pump;
+          }
+          else {
+          }
+        }
+        else {
+          // do nothing since new pump program is set to 0
+        }
+
+  - id: intelliflo_stop_start
+    then:
+      lambda: |-
+        unsigned long current_millis = millis();
+        // should pump be started
+        if(id(g_should_pump_be_started) == true) {
+          // if pump is running
+          if(id(pump_running).state == true) {
+            id(g_should_pump_be_started)=false;
+          }
+          // pump is not running
+          else {
+            // check if pump should have been running for more than the stop/start delay
+            unsigned long pump_delay_millis = current_millis - id(g_should_pump_be_started_millis);
+            if(pump_delay_millis >= id(g_pump_start_stop_delay)) {
+              id(pentairpump).run();
+              id(g_should_pump_be_started)=false;
+            }
+          }
+        }
+        // should pump be stopped
+        if(id(g_should_pump_be_stopped) == true) {
+          // is pump running
+          if(id(pump_running).state == true) {
+            // check if pump should have been stopped for more than the stop/start delay
+            unsigned long pump_delay_millis = current_millis - id(g_should_pump_be_stopped_millis);
+            if(pump_delay_millis >= id(g_pump_start_stop_delay)) {
+              id(pentairpump).stop();
+              id(g_should_pump_be_stopped)=false;
+            }    
+          }
+          // pump is not running
+          else {
+            id(g_should_pump_be_stopped)=false;
+          }
+        }
+
+  - id: ichlor_on_off_script # Triggered every minute from Time 
+    then:
+      lambda: |-
+        //if (id(sntp_time).now().is_valid()) {
+          // check if ichlor is enabled and the override function is disabled
+          if (id(ichlor_enabled).state == true && id(ichlor_override).state == false) { 
+            // get current millis
+            unsigned long current_millis = millis(); // changed to MILLIS: auto current_time = id(sntp_time).now().timestamp;
+            // check if pump is running
+            if (id(pump_running_status).state == true) {
+              // pump is running
+                // check if program is freeze protect (4)
+                if (id(g_pump_mode) == 4) {
+                  // running program is 4
+                  // check if ichlor is enabled or disabled
+                  if (id(ichlor_enabled_during_freeze_protect).state == true) {
+                    // ichlor is set to work during freeze protect
+                    //check if iChlor is ON  
+                    if (id(ichlor_relay).state == true) {
+                      // iChlor is on
+                      // nothing to do
+                    }
+                    else {
+                      // iChlor is off so must turn it on 
+                      unsigned long pump_running_for_millis = current_millis - id(g_pump_started_running_millis);
+                      ESP_LOGD("TEST", "Pump running for: %d", pump_running_for_millis);
+                      if (pump_running_for_millis >= (id(ichlor_on_off_delay).state * 1000)) {
+                          id(ichlor_relay).turn_on();
+                          ESP_LOGD("TEST", "iChlor turned on");
+                      }
+                    }
+                  }
+                  // ichlor is set not to work during freeze protect
+                  else {
+                    if (id(ichlor_relay).state == true) {
+                      // iChlor is on
+                      // switch it off
+                      id(ichlor_relay).turn_off();
+                    }
+                    else {
+                      // iChlor is off so must remain off
+                      // nothing to do 
+                    }
+                  }
+                }
+                else {
+                  // running different program than 4
+                  // do regular checks
+                  if (id(ichlor_relay).state == false)
+                    // iChlor is off
+                    // check if iChlor is ready to be turned on
+                    {
+                      unsigned long pump_running_for_millis = current_millis - id(g_pump_started_running_millis);
+                      //int ichlordelay = id(ichlor_on_off_delay).state;
+                      ESP_LOGD("TEST", "Pump running for: %d", pump_running_for_millis);
+                      if (pump_running_for_millis >= (id(ichlor_on_off_delay).state * 1000))
+                      //if (ichlordelay != 0 && pump_running_for_millis >= (ichlordelay * 1000)) 
+                        {
+                          id(ichlor_relay).turn_on();
+                          ESP_LOGD("TEST", "iChlor turned on");
+                        }
+                    }
+                  else {
+                    // iChlor is alredy on
+                    // nothing to do
+                  }
+                }
+            }
+            else {
+            // pump is not running
+              if (id(ichlor_relay).state == true)
+                // iChlor is on
+                {
+                  unsigned long pump_stopped_for_millis = current_millis - id(g_pump_stopped_running_millis);
+                  //int ichlordelay = id(ichlor_on_off_delay).state;
+                  ESP_LOGD("TEST", "Pump stopped for: %d", pump_stopped_for_millis);
+                  if (pump_stopped_for_millis >= (id(ichlor_on_off_delay).state * 1000))
+                    {
+                      id(ichlor_relay).turn_off();
+                      ESP_LOGD("TEST", "iChlor turned off");
+                    }
+                }
+            }
+          }
+          else if (id(ichlor_enabled).state == true && id(ichlor_override).state == true && id(ichlor_relay).state == false ) {
+            id(ichlor_relay).turn_on();
+          }
+          else {}
+        //}
+  - id: waterfall_open_close
+    then:
+      lambda:  |-
+        // check if waterfall is enabled
+          bool should_waterfall_be_enabled = false;
+          if(id(waterfall_enabled).state == true) {
+          // create variable to store outcome of this check
+          //check if waterfall schedule is enabled
+            if(id(waterfall_schedule_enabled).state ==true) {
+              //schedule is enabled
+              // check if current time is in Waterfall window
+              auto current_time = (id(sntp_time).now().hour * 3600) + (id(sntp_time).now().minute * 60) + (id(sntp_time).now().second);
+              auto schedule_start_time_seconds = (id(waterfall_sched_start).hour * 3600) + (id(waterfall_sched_start).minute * 60) + id(waterfall_sched_start).second;
+              auto schedule_end_time_seconds = (id(waterfall_sched_end).hour * 3600) + (id(waterfall_sched_end).minute * 60) + id(waterfall_sched_end).second;
+              if (current_time >= schedule_start_time_seconds && current_time < schedule_end_time_seconds) {
+                // is is in the window
+                should_waterfall_be_enabled = true;
+              }
+            }
+            // check if waterfall should always be on
+            if(id(waterfall_always_on).state ==true){
+              // then it should be on
+              should_waterfall_be_enabled = true;
+            }
+            if(id(waterfall_relay).state == true && should_waterfall_be_enabled == false) {
+                id(waterfall_relay).turn_off();
+            }
+            if(id(waterfall_relay).state == false && should_waterfall_be_enabled == true) {
+                id(waterfall_relay).turn_on();
+            }
+          }
+          else {
+            if(id(waterfall_relay).state == true) {
+                id(waterfall_relay).turn_off();
+            }
+          }
+
+  - id: pool_heating_check
+    then:
+      lambda:  |-
+        // if pool heating is enabled
+        if (id(heating_enabled).state == true) {
+          // check if pump is running  
+          if(id(pump_running_status).state == true) {
+            float pooltemp = round(id(pool_temp_c).state / 0.1) * 0.1;
+            float rooftemp = round(id(roof_temp_c).state / 0.1) * 0.1;
+            float roofpooldiff = id(roof_pool_diff).state;
+            float targettemp = id(target_temperature).state;
+            // is roof hotter than pool + pooldiff?
+            if ((rooftemp - pooltemp) > roofpooldiff) {
+              // roof is hotter
+              // is it already heating?
+              if(id(heater_relay).state == false) {
+                // it isn't heating yet so check if pool temp is less than target temp
+                if (pooltemp < targettemp) {
+                  // pool is below target temperature so I need to switch on the heating
+                  id(heater_relay).turn_on();
+                  id(g_previous_pump_program) = id(g_current_pump_program);
+                  id(g_new_pump_program) = id(heater_program).active_index().value() + 1;
+                  id(g_program_change_in_mode) = 9;
+                }
+              }
+              else {
+                // it is heating, need to check if it reached target temp + offset (hard coded to 0.3)
+                if (pooltemp >= targettemp + 0.3) {
+                  // it reached target temp + offset
+                  id(heater_relay).turn_off();
+                  id(g_new_pump_program) = id(g_previous_pump_program);
+                  id(g_program_change_in_mode) = 9;                  
+                }
+              }
+            }
+            else {
+              // roof not hotter than pool + offset so check if it's lower than pool
+              if (rooftemp <= pooltemp) {
+                if (id(heater_relay).state == true) {
+                  id(heater_relay).turn_off();
+                  id(g_new_pump_program) = id(g_previous_pump_program);
+                  id(g_program_change_in_mode) = 9;                
+                }
+              }
+            }
+          }
+          else {
+            // pump not running - check if valve is opened
+            if(id(heater_relay).state == true) {
+              //valve is open, need to close it and revert program
+              id(heater_relay).turn_off();
+              id(g_new_pump_program) = id(g_previous_pump_program);
+              id(g_program_change_in_mode) = 9;         
+            }
+          }
+        }
+        // pool heating not enabled, need to check if valve is open and close it
+        else {
+            // if valve is open, then close it
+            if (id(heater_relay).state == true) {
+              id(heater_relay).turn_off();
+              id(g_new_pump_program) = id(g_previous_pump_program);
+              id(g_program_change_in_mode) = 9;
+            }          
+        }        
+
+  - id: freeze_protect_check
+    then:
+      lambda:  |-
+        if (id(freeze_protect_enabled).state == true) {
+          //check if pump mode is inactive or already in freeze protect
+          if (id(pool_switchbot_temperature_c).state <= id(freeze_protect_temperature).state) {
+          // freeze protect temperature is reached
+            if(id(g_pump_mode)== 0) {
+              // set pump mode to 4 freeze protect
+              id(g_pump_mode) = 4;
+              id(g_freeze_protect_active) = true;
+              // set that pump should be running
+              // id(g_should_pump_be_running) = true;
+              // id(g_should_pump_be_running_millis) = millis();
+              id(g_should_pump_be_started) = true;
+              id(g_should_pump_be_started_millis) = millis();
+              id(g_should_pump_be_stopped) = false;
+              id(g_new_pump_program) = id(freeze_protect_program).active_index().value() + 1;
+              id(g_program_change_in_mode) = 4;
+              if (id(ichlor_override).state == true && id(ichlor_enabled_during_freeze_protect).state == false && id(ichlor_relay).state == true) {
+                id(g_ichlor_state_before_freeze_protect) = true;
+                id(ichlor_relay).turn_off();
+              }
+            }
+          }
+          if (id(pool_switchbot_temperature_c).state >= id(freeze_protect_temperature).state +1) {
+            if(id(g_pump_mode)== 4) {
+              // set pump mode to 0
+              id(g_pump_mode) = 0;
+              id(g_freeze_protect_active) = false;
+              // set that pump should be running
+              // id(g_should_pump_be_running) = true;
+              // id(g_should_pump_be_running_millis) = millis();
+              id(g_should_pump_be_stopped) = true;
+              id(g_should_pump_be_stopped_millis) = millis();
+              id(g_should_pump_be_started) = false;
+              if (id(ichlor_override).state == true && id(ichlor_enabled_during_freeze_protect).state == false && id(g_ichlor_state_before_freeze_protect) == true) {
+                id(g_ichlor_state_before_freeze_protect) = false;
+                id(ichlor_relay).turn_on(); 
+              }
+            }
+          }
+        }
+        // freeze protect is not enabled
+        else {
+          // check if it was disabled while running
+          if(id(g_pump_mode) == 4) {
+            // set pump mode to 0 inactive
+            id(g_pump_mode) = 0;
+            // set that pump should be running
+            id(g_freeze_protect_active) = false;
+              //id(g_should_pump_be_running) = false;
+              //id(g_should_pump_be_running_millis) = millis();
+            id(g_should_pump_be_stopped) = true;
+            id(g_should_pump_be_stopped_millis) = millis();
+            id(g_should_pump_be_started) = false;
+            if (id(ichlor_override).state == true && id(ichlor_enabled_during_freeze_protect).state == false && id(g_ichlor_state_before_freeze_protect) == true) {
+              id(g_ichlor_state_before_freeze_protect) = false;
+              id(ichlor_relay).turn_on(); 
+            }
+          }
+        }          
+
