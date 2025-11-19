@@ -290,7 +290,7 @@ void Intelliflo::saveValueForProgram(int prog, int value) {
 
 void Intelliflo::commandRPM(int rpm) {
   ESP_LOGI(TAG, "Command RPM: %d rpm", rpm);
-  uint8_t pumpPowerPacket[] = {0xA5, 0x00, 0x60, 0x10, 0x0A, 0x04, 0x02, 0xC4, 0, 0};
+  uint8_t pumpPowerPacket[] = {0xA5, 0x00, 0x60, 0x10, 0x01, 0x04, 0x02, 0xC4, 0, 0};
   pumpPowerPacket[8] = floor(rpm / 256);
   pumpPowerPacket[9] = rpm % 256;
   QueuePacket(pumpPowerPacket, 10);
