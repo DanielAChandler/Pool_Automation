@@ -8,6 +8,9 @@ from esphome.const import (
     UNIT_WATT,
     UNIT_REVOLUTIONS_PER_MINUTE,
     UNIT_CUBIC_METER_PER_HOUR,
+    DEVICE_CLASS_DURATION,
+    DEVICE_CLASS_TIMESTAMP,
+    UNIT_MINUTE,
 )
 from . import INTELLIFLO_CHILD_SCHEMA, CONF_INTELLIFLO_ID
 
@@ -18,6 +21,8 @@ CONF_POWER = "power"
 CONF_RPM = "rpm"
 CONF_FLOW = "flow"
 CONF_PRESSURE = "pressure"
+CONF_TIME_REMAINING = "time_remaining"
+CONF_CLOCK = "clock"
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -39,6 +44,16 @@ CONFIG_SCHEMA = cv.Schema(
             unit_of_measurement="bar",
             accuracy_decimals=3,
             device_class=DEVICE_CLASS_PRESSURE,
+        ),
+        cv.Optional(CONF_TIME_REMAINING): sensor.sensor_schema(
+            unit_of_measurement=UNIT_MINUTE,
+            accuracy_decimals=0,
+            device_class=DEVICE_CLASS_DURATION,
+        ),
+        cv.Optional(CONF_CLOCK): sensor.sensor_schema(
+            unit_of_measurement=UNIT_MINUTE,
+            accuracy_decimals=0,
+            device_class=DEVICE_CLASS_DURATION,
         ),
     }
 ).extend(INTELLIFLO_CHILD_SCHEMA)
@@ -62,3 +77,11 @@ async def to_code(config):
     if pressure_config := config.get(CONF_PRESSURE):
         sens = await sensor.new_sensor(pressure_config)
         cg.add(var.set_pressure(sens))
+
+    if time_remaining_config := config.get(CONF_TIME_REMAINING):
+        sens = await sensor.new_sensor(time_remaining_config)
+        cg.add(var.set_time_remaining(sens))
+
+    if clock_config := config.get(CONF_CLOCK):
+        sens = await sensor.new_sensor(clock_config)
+        cg.add(var.set_clock(sens))

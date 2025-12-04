@@ -182,6 +182,13 @@ void Intelliflo::parse_packet(const std::vector<uint8_t> &data) {
       this->flow_->publish_state(data[13] * 0.227);  // GPM to m3/hr
     if (this->pressure_ != nullptr)
       this->pressure_->publish_state(data[14] / 14.504);  // PSI to bar
+    if (this->time_remaining_ != nullptr) {
+      this->time_remaining_->publish_state(data[17] * 60 + data[18]);
+    }
+    if (this->clock_ != nullptr) {
+      // Publish pump clock as total minutes (hours * 60 + minutes)
+      this->clock_->publish_state(data[19] * 60 + data[20]);
+    }
     //
     //
     // this->timer_hour = packet.data[11];

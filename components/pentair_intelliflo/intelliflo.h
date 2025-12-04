@@ -66,6 +66,8 @@ class Intelliflo : public uart::UARTDevice, public PollingComponent {
   sensor::Sensor *rpm_;
   sensor::Sensor *flow_;
   sensor::Sensor *pressure_;
+  sensor::Sensor *time_remaining_;
+  sensor::Sensor *clock_;
 
   binary_sensor::BinarySensor *running_;
 
@@ -78,6 +80,8 @@ class Intelliflo : public uart::UARTDevice, public PollingComponent {
   void set_rpm(sensor::Sensor *sensor) { rpm_ = sensor; }
   void set_flow(sensor::Sensor *sensor) { flow_ = sensor; }
   void set_pressure(sensor::Sensor *sensor) { pressure_ = sensor; }
+  void set_time_remaining(sensor::Sensor *sensor) { time_remaining_ = sensor; }
+  void set_clock(sensor::Sensor *sensor) { clock_ = sensor; }
 
   void set_running(binary_sensor::BinarySensor *sensor) { running_ = sensor; }
 
