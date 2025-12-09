@@ -225,9 +225,11 @@ class IntelliChlorRS485:
         """Calculate 8-bit checksum for payload bytes."""
         return sum(payload) & 0xFF
     
-    def send_frame(self, dest, cmd, data=[]):
+    def send_frame(self, dest, cmd, data=None):
         """Send a framed command to IntelliChlor."""
         # Build payload
+        if data is None:
+            data = []
         payload = [dest, cmd] + data
         checksum = self.calculate_checksum(payload)
         
@@ -239,9 +241,6 @@ class IntelliChlorRS485:
         
         # Send frame
         self.ser.write(bytes(frame))
-        
-        # Wait inter-byte time
-        time.sleep(0.002)  # 2 ms
     
     def read_response(self, timeout=0.5):
         """Read and parse response frame."""
@@ -253,8 +252,10 @@ class IntelliChlorRS485:
                 byte = self.ser.read(1)[0]
                 buffer.append(byte)
                 
-                # Check for complete frame
-                if len(buffer) >= 4 and buffer[-2:] == [0x10, 0x03]:
+                # Check for complete frame with valid header and footer
+                if (len(buffer) >= 6 and 
+                    buffer[0:2] == [0x10, 0x02] and 
+                    buffer[-2:] == [0x10, 0x03]):
                     return buffer
         
         return None
@@ -316,6 +317,9 @@ if __name__ == "__main__":
 #define RS485_RX_PIN 16
 #define RS485_DE_RE_PIN 4  // Driver Enable / Receiver Enable
 
+// Buffer size for payload
+#define MAX_PAYLOAD_SIZE 32
+
 // UART Configuration
 HardwareSerial RS485Serial(1);
 
@@ -342,7 +346,7 @@ uint8_t calculateChecksum(uint8_t* payload, uint8_t len) {
 
 void sendFrame(uint8_t dest, uint8_t cmd, uint8_t* data, uint8_t dataLen) {
     // Build payload
-    uint8_t payload[32];
+    uint8_t payload[MAX_PAYLOAD_SIZE];
     payload[0] = dest;
     payload[1] = cmd;
     for (uint8_t i = 0; i < dataLen; i++) {
@@ -398,9 +402,9 @@ void loop() {
         // Wait and parse response
         delay(100);
         if (RS485Serial.available() >= 8) {
-            uint8_t response[32];
+            uint8_t response[MAX_PAYLOAD_SIZE];
             uint8_t len = 0;
-            while (RS485Serial.available() && len < 32) {
+            while (RS485Serial.available() && len < MAX_PAYLOAD_SIZE) {
                 response[len++] = RS485Serial.read();
             }
             
