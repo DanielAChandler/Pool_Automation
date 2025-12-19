@@ -75,7 +75,7 @@ void INTELLICHLORComponent::loop() {
                 this->flow_control_pin_->digital_write(true);
             }
             
-            ESP_LOGV(TAG, "Sending %i bytes", data->size());
+            ESP_LOGV(TAG, "Sending %i bytes", data.size());
             this->write_array(data);
             this->flush();
 
@@ -105,6 +105,22 @@ void INTELLICHLORComponent::set_swg_percent() {
 
 void INTELLICHLORComponent::set_takeover_mode(bool enable) {
     this->read_all_info();
+}
+
+void INTELLICHLORComponent::get_more_() {
+     /*
+   uint8_t cmd1[3] = {0x50, 0x0d, 0x00};
+    ESP_LOGD(TAG, "send GetMore 0x0d");
+    this->send_command_(cmd1, 3, 1);
+    uint8_t cmd2[3] = {0x50, 0x0e, 0x00};
+    ESP_LOGD(TAG, "send GetMore 0x0e");
+    this->send_command_(cmd2, 3, 1);
+    */
+    /*
+    uint8_t cmd4[3] = {0x50, 0x12, 0x00};
+    ESP_LOGD(TAG, "send GetMore 0x12");
+    this->send_command_(cmd4, 3, 1);
+    */
 }
 
 void INTELLICHLORComponent::get_version_() {
@@ -161,6 +177,9 @@ void INTELLICHLORComponent::read_all_info() {
         }
         this->get_version_();
         this->get_temp_();
+        this->get_more_();
+        /*
+        */
     }
 }
 

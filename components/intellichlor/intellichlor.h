@@ -57,6 +57,7 @@ class INTELLICHLORComponent : public PollingComponent, public uart::UARTDevice {
   
   void get_version_();
   void get_temp_();
+  void get_more_();
   void takeover_();
   void set_percent_(uint8_t percent);
 
