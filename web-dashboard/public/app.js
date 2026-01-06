@@ -1,5 +1,5 @@
 // --- Pump End Time Editing ---
-window.editPumpEndTime = function() {
+window.editPumpEndTime = function () {
     document.getElementById('pump-end-time-popup').style.display = 'flex';
     // Pre-fill with current value
     const current = document.getElementById('pump-end-time-tbl').textContent.trim();
@@ -9,13 +9,13 @@ window.editPumpEndTime = function() {
         h = parseInt(h);
         if (ampm === 'PM' && h !== 12) h += 12;
         if (ampm === 'AM' && h === 12) h = 0;
-        document.getElementById('pump-end-time-input').value = `${String(h).padStart(2,'0')}:${m}`;
+        document.getElementById('pump-end-time-input').value = `${String(h).padStart(2, '0')}:${m}`;
     }
 };
-window.closePumpEndTimePopup = function() {
+window.closePumpEndTimePopup = function () {
     document.getElementById('pump-end-time-popup').style.display = 'none';
 };
-window.savePumpEndTime = async function() {
+window.savePumpEndTime = async function () {
     if (!pool) return;
     const val = document.getElementById('pump-end-time-input').value;
     try {
@@ -31,7 +31,7 @@ window.savePumpEndTime = async function() {
 let editingScheduleNum = null;
 
 // Edit Start Time
-window.editScheduleStart = function(num) {
+window.editScheduleStart = function (num) {
     editingScheduleNum = num;
     document.getElementById('schedule-time-popup').style.display = 'flex';
     // Pre-fill with current value
@@ -43,14 +43,14 @@ window.editScheduleStart = function(num) {
         h = parseInt(h);
         if (ampm === 'PM' && h !== 12) h += 12;
         if (ampm === 'AM' && h === 12) h = 0;
-        document.getElementById('schedule-time-input').value = `${String(h).padStart(2,'0')}:${m}`;
+        document.getElementById('schedule-time-input').value = `${String(h).padStart(2, '0')}:${m}`;
     }
 };
-window.closeScheduleTimePopup = function() {
+window.closeScheduleTimePopup = function () {
     document.getElementById('schedule-time-popup').style.display = 'none';
     editingScheduleNum = null;
 };
-window.saveScheduleTime = async function() {
+window.saveScheduleTime = async function () {
     if (!pool || !editingScheduleNum) return;
     const val = document.getElementById('schedule-time-input').value;
     try {
@@ -64,18 +64,18 @@ window.saveScheduleTime = async function() {
 };
 
 // Edit Speed
-window.editScheduleSpeed = function(num) {
+window.editScheduleSpeed = function (num) {
     editingScheduleNum = num;
     document.getElementById('schedule-speed-popup').style.display = 'flex';
     // Pre-fill with current value
     const current = document.getElementById(`schedule-${num}-speed-tbl`).textContent.trim();
     document.getElementById('schedule-speed-select').value = current;
 };
-window.closeScheduleSpeedPopup = function() {
+window.closeScheduleSpeedPopup = function () {
     document.getElementById('schedule-speed-popup').style.display = 'none';
     editingScheduleNum = null;
 };
-window.saveScheduleSpeed = async function() {
+window.saveScheduleSpeed = async function () {
     if (!pool || !editingScheduleNum) return;
     const val = document.getElementById('schedule-speed-select').value;
     try {
@@ -89,7 +89,7 @@ window.saveScheduleSpeed = async function() {
 };
 
 // Toggle Waterfall
-window.toggleScheduleWaterfall = async function(num) {
+window.toggleScheduleWaterfall = async function (num) {
     if (!pool) return;
     try {
         // Get current state
@@ -114,7 +114,7 @@ document.getElementById('chlorine-slider').addEventListener('input', (e) => {
 });
 
 // Connect to ESPHome device
-window.connectToDevice = async function() {
+window.connectToDevice = async function () {
     const host = document.getElementById('host').value;
     const port = document.getElementById('port').value;
     const username = document.getElementById('username').value;
@@ -125,9 +125,14 @@ window.connectToDevice = async function() {
     const needsProxy = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '';
 
     try {
+        const host = document.getElementById('host').value.trim();
+        const port = document.getElementById('port').value.trim();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+
         pool = createPoolClient({
             host: host,
-            port: parseInt(port),
+            port: parseInt(port) || 80,
             username: username || undefined,
             password: password || undefined,
             useProxy: needsProxy, // Only use proxy on dev server
@@ -159,7 +164,7 @@ window.connectToDevice = async function() {
 };
 
 // Disconnect
-window.disconnectFromDevice = function() {
+window.disconnectFromDevice = function () {
     pool = null;
     document.getElementById('connection-status').textContent = 'Disconnected';
     document.getElementById('connection-status').className = 'status-disconnected';
@@ -183,7 +188,7 @@ window.disconnectFromDevice = function() {
 };
 
 // Toggle Configuration Section
-window.toggleConfiguration = function() {
+window.toggleConfiguration = function () {
     const configSection = document.getElementById('configuration-section');
     if (configSection.style.display === 'none') {
         configSection.style.display = 'block';
@@ -204,9 +209,9 @@ function showAllSections() {
         'pool-light-section',
         'switches-section',
         'schedule-overview-section',
-        'schedules-section',
-        'maintenance-section',
-        'auto-refresh-section'
+        //        'schedules-section',
+        'auto-refresh-section',
+        'system-section'
     ];
     sections.forEach(id => {
         document.getElementById(id).style.display = 'block';
@@ -227,7 +232,8 @@ function hideAllSections() {
         'schedule-overview-section',
         'schedules-section',
         'maintenance-section',
-        'auto-refresh-section'
+        'auto-refresh-section',
+        'system-section'
     ];
     sections.forEach(id => {
         document.getElementById(id).style.display = 'none';
@@ -253,19 +259,21 @@ async function refreshAll() {
 }
 
 // Refresh System Info
-window.refreshSystemInfo = async function() {
+window.refreshSystemInfo = async function () {
     if (!pool) return;
     try {
-        // System info not yet implemented in modular API
-        // TODO: Add system info API methods
-        console.log('System info refresh not yet implemented');
+        const info = await pool.system.getSystemInfo();
+        document.getElementById('esphome-version').textContent = info.esphomeVersion;
+        document.getElementById('wifi-ssid').textContent = info.ssid;
+        document.getElementById('wifi-ip').textContent = info.ipAddress;
+        document.getElementById('wifi-signal').textContent = `${info.wifiSignal} dBm`;
     } catch (error) {
         console.error('Error refreshing system info:', error);
     }
 };
 
 // Refresh Pump Status
-window.refreshPumpStatus = async function() {
+window.refreshPumpStatus = async function () {
     if (!pool) return;
     try {
         const pumpRunning = await pool.pump.getPumpRunning();
@@ -291,20 +299,18 @@ window.refreshPumpStatus = async function() {
 };
 
 // Refresh Temperatures
-window.refreshTemperatures = async function() {
+window.refreshTemperatures = async function () {
     if (!pool) return;
     try {
         const temps = await pool.temperature.getTemperatures();
         document.getElementById('air-temp-f').textContent = temps.airTemperatureF;
-        document.getElementById('air-temp-c').textContent = temps.airTemperature;
-        document.getElementById('water-temp-f').textContent = temps.waterTemperatureF;
-        document.getElementById('water-temp-c').textContent = temps.waterTemperature;
-        
+        document.getElementById('pool-temp-f').textContent = temps.waterTemperatureF;
+
         try {
             const chlorinatorMetrics = await pool.chlorinator.getChlorinatorMetrics();
-            document.getElementById('chlorinator-temp').textContent = chlorinatorMetrics.chlorinatorTemperature;
+            document.getElementById('solar-temp-f').textContent = chlorinatorMetrics.chlorinatorTemperature;
         } catch (e) {
-            document.getElementById('chlorinator-temp').textContent = 'N/A';
+            document.getElementById('solar-temp-f').textContent = 'N/A';
         }
     } catch (error) {
         console.error('Error refreshing temperatures:', error);
@@ -312,7 +318,7 @@ window.refreshTemperatures = async function() {
 };
 
 // Refresh Alarms
-window.refreshAlarms = async function() {
+window.refreshAlarms = async function () {
     if (!pool) return;
     try {
         const alarms = await pool.chlorinator.getChlorinatorAlarms();
@@ -331,7 +337,7 @@ window.refreshAlarms = async function() {
 };
 
 // Refresh Chlorinator
-window.refreshChlorinator = async function() {
+window.refreshChlorinator = async function () {
     if (!pool) return;
     try {
         const metrics = await pool.chlorinator.getChlorinatorMetrics();
@@ -358,7 +364,7 @@ window.refreshChlorinator = async function() {
 };
 
 // Refresh Pump Mode
-window.refreshPumpMode = async function() {
+window.refreshPumpMode = async function () {
     if (!pool) return;
     try {
         const mode = await pool.pump.getMode();
@@ -370,7 +376,7 @@ window.refreshPumpMode = async function() {
 };
 
 // Refresh Pump Speeds
-window.refreshPumpSpeeds = async function() {
+window.refreshPumpSpeeds = async function () {
     if (!pool) return;
     try {
         for (let i = 1; i <= 5; i++) {
@@ -383,7 +389,7 @@ window.refreshPumpSpeeds = async function() {
 };
 
 // Refresh Pool Light
-window.refreshPoolLight = async function() {
+window.refreshPoolLight = async function () {
     if (!pool) return;
     try {
         // Refresh pool light power switch
@@ -408,29 +414,29 @@ window.refreshPoolLight = async function() {
 };
 
 // Refresh Switches
-window.refreshSwitches = async function() {
+window.refreshSwitches = async function () {
     if (!pool) return;
     try {
         // Get waterfall state
         const waterfall = await pool.pump.getWaterfall();
         updateToggleButton('switch-waterfall', waterfall);
-        
+
         // Get waterfall auto state
         const waterfallAuto = await pool.pump.getWaterfallAuto();
         updateToggleButton('switch-waterfall-auto', waterfallAuto);
-        
+
         // Get auto schedule state
         const autoSchedule = await pool.pump.getAutoSchedule();
         updateToggleButton('switch-auto-schedule', autoSchedule);
-        
+
         // Get takeover mode
         const takeover = await pool.pump.getTakeoverMode();
         updateToggleButton('switch-takeover', takeover);
-        
+
         // Get off state
         const off = await pool.pump.getOff();
         updateToggleButton('switch-off', off);
-        
+
         // Get pool light mode
         const lightMode = await pool.light.getLightMode();
         document.getElementById('current-light-mode').textContent = lightMode;
@@ -441,7 +447,7 @@ window.refreshSwitches = async function() {
 };
 
 // Refresh Schedule Statuses
-window.refreshScheduleStatuses = async function() {
+window.refreshScheduleStatuses = async function () {
     if (!pool) return;
     try {
         const statuses = await pool.pump.getScheduleStatuses();
@@ -450,7 +456,7 @@ window.refreshScheduleStatuses = async function() {
         document.getElementById('schedule-3-status').textContent = statuses.schedule3Status;
         document.getElementById('schedule-4-status').textContent = statuses.schedule4Status;
         document.getElementById('schedule-5-status').textContent = statuses.schedule5Status;
-        
+
         // Load schedule off status
         const scheduleOffStatus = await pool.pump.getScheduleOffStatus();
         document.getElementById('schedule-off-status').textContent = scheduleOffStatus;
@@ -460,7 +466,7 @@ window.refreshScheduleStatuses = async function() {
 };
 
 // Refresh Schedule Settings (times, speeds, waterfall)
-window.refreshScheduleSettings = async function() {
+window.refreshScheduleSettings = async function () {
     if (!pool) return;
     try {
         // Load all 5 schedules
@@ -493,7 +499,7 @@ window.refreshScheduleSettings = async function() {
 };
 
 // Refresh Schedule Overview
-window.refreshScheduleOverview = async function() {
+window.refreshScheduleOverview = async function () {
     if (!pool) return;
     try {
         // Helper function to convert 24-hour time to 12-hour format
@@ -556,7 +562,7 @@ window.refreshScheduleOverview = async function() {
 };
 
 // Set Chlorine Output
-window.setChlorineOutput = async function() {
+window.setChlorineOutput = async function () {
     if (!pool) return;
     try {
         const value = parseInt(document.getElementById('chlorine-slider').value);
@@ -570,7 +576,7 @@ window.setChlorineOutput = async function() {
 };
 
 // Set Pump Mode
-window.setPumpMode = async function() {
+window.setPumpMode = async function () {
     if (!pool) return;
     try {
         const mode = document.getElementById('mode-select').value;
@@ -584,7 +590,7 @@ window.setPumpMode = async function() {
 };
 
 // Set Pump Speed
-window.setPumpSpeed = async function(speedNum) {
+window.setPumpSpeed = async function (speedNum) {
     if (!pool) return;
     try {
         const rpm = parseInt(document.getElementById(`speed-${speedNum}`).value);
@@ -597,21 +603,21 @@ window.setPumpSpeed = async function(speedNum) {
 };
 
 // Adjust Pump Speed with Spinners
-window.adjustSpeed = function(speedNum, delta) {
+window.adjustSpeed = function (speedNum, delta) {
     const input = document.getElementById(`speed-${speedNum}`);
     let currentValue = parseInt(input.value) || 450;
     let newValue = currentValue + delta;
-    
+
     // Enforce min/max bounds
     const min = parseInt(input.min) || 450;
     const max = parseInt(input.max) || 3450;
-    
+
     newValue = Math.max(min, Math.min(max, newValue));
     input.value = newValue;
 };
 
 // Toggle Switch
-window.toggleSwitch = async function(switchId, button) {
+window.toggleSwitch = async function (switchId, button) {
     if (!pool) return;
     try {
         // Map switch IDs to API methods
@@ -625,6 +631,26 @@ window.toggleSwitch = async function(switchId, button) {
             const state = await pool.light.getPoolLightState();
             updateToggleButton(button.id, state);
             showNotification(`Pool light toggled ${state ? 'ON' : 'OFF'}`, 'success');
+        } else if (switchId === 'takeover_mode') {
+            await pool.pump.toggleTakeoverMode();
+            const state = await pool.pump.getTakeoverMode();
+            updateToggleButton(button.id, state);
+            showNotification(`Takeover mode toggled ${state ? 'ON' : 'OFF'}`, 'success');
+        } else if (switchId === 'waterfall__auto_') {
+            await pool.pump.toggleWaterfallAuto();
+            const state = await pool.pump.getWaterfallAuto();
+            updateToggleButton(button.id, state);
+            showNotification(`Waterfall auto mode toggled ${state ? 'ON' : 'OFF'}`, 'success');
+        } else if (switchId === 'auto_schedule') {
+            await pool.pump.toggleAutoSchedule();
+            const state = await pool.pump.getAutoSchedule();
+            updateToggleButton(button.id, state);
+            showNotification(`Auto schedule toggled ${state ? 'ON' : 'OFF'}`, 'success');
+        } else if (switchId === 'off') {
+            await pool.pump.toggleOff();
+            const state = await pool.pump.getOff();
+            updateToggleButton(button.id, state);
+            showNotification(`System OFF toggled ${state ? 'ON' : 'OFF'}`, 'success');
         } else {
             showNotification(`Switch ${switchId} not yet implemented`, 'warning');
         }
@@ -635,7 +661,7 @@ window.toggleSwitch = async function(switchId, button) {
 };
 
 // Set Schedule
-window.setSchedule = async function(scheduleNum) {
+window.setSchedule = async function (scheduleNum) {
     if (!pool) return;
     try {
         const time = document.getElementById(`schedule-${scheduleNum}-time`).value + ':00';
@@ -655,7 +681,7 @@ window.setSchedule = async function(scheduleNum) {
 };
 
 // Sync Pump Clock
-window.syncPumpClock = async function() {
+window.syncPumpClock = async function () {
     if (!pool) return;
     try {
         await pool.pump.syncPumpClock();
@@ -668,11 +694,11 @@ window.syncPumpClock = async function() {
 };
 
 // Set Light Mode
-window.setLightMode = async function() {
+window.setLightMode = async function () {
     if (!pool) return;
     const mode = document.getElementById('light-mode-select').value;
     if (!mode) return;
-    
+
     try {
         await pool.light.setLightMode(mode);
         showNotification(`Light mode set to ${mode}`, 'success');
@@ -684,7 +710,7 @@ window.setLightMode = async function() {
 };
 
 // Refresh Chlorinator Action
-window.refreshChlorinatorAction = async function() {
+window.refreshChlorinatorAction = async function () {
     if (!pool) return;
     try {
         await pool.chlorinator.refreshChlorinator();
@@ -697,7 +723,7 @@ window.refreshChlorinatorAction = async function() {
 };
 
 // Toggle Auto Refresh
-window.toggleAutoRefresh = function() {
+window.toggleAutoRefresh = function () {
     const enabled = document.getElementById('auto-refresh-toggle').checked;
     const interval = parseInt(document.getElementById('refresh-interval').value) * 1000;
 
@@ -736,10 +762,10 @@ function updateAlarm(elementId, active) {
 function updateToggleButton(elementId, state) {
     const button = document.getElementById(elementId);
     if (!button) return;
-    
+
     // Handle both boolean and string states
     const isOn = state === true || state === 'ON' || state === 'on';
-    
+
     button.textContent = isOn ? 'ON' : 'OFF';
     button.className = 'btn btn-toggle ' + (isOn ? 'on' : 'off');
 }
@@ -747,7 +773,7 @@ function updateToggleButton(elementId, state) {
 function showNotification(message, type = 'info') {
     const emoji = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
     console.log(`${emoji} ${message}`);
-    
+
     // Create toast container if it doesn't exist
     let container = document.getElementById('toast-container');
     if (!container) {
@@ -756,7 +782,7 @@ function showNotification(message, type = 'info') {
         container.className = 'toast-container';
         document.body.appendChild(container);
     }
-    
+
     // Create toast element
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -765,9 +791,9 @@ function showNotification(message, type = 'info') {
         <span class="toast-message">${message}</span>
         <button class="toast-close" onclick="this.parentElement.remove()">×</button>
     `;
-    
+
     container.appendChild(toast);
-    
+
     // Auto remove after 4 seconds
     setTimeout(() => {
         toast.classList.add('hiding');
@@ -779,16 +805,16 @@ function showNotification(message, type = 'info') {
 async function checkAndAutoConnect() {
     const currentHost = window.location.hostname;
     const defaultPort = 80;
-    
+
     // Pre-fill host field
     document.getElementById('host').value = currentHost;
-    
+
     // Skip auto-connect if on localhost/development server
     if (currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '') {
         console.log('Development mode - skipping auto-connect');
         return;
     }
-    
+
     try {
         // Create a test client - no proxy needed when on same host as API
         const testClient = createPoolClient({
@@ -796,10 +822,10 @@ async function checkAndAutoConnect() {
             port: defaultPort,
             useProxy: false  // Direct connection when on same host
         });
-        
+
         // Try to get pump status to verify API is available
         await testClient.pump.getPumpRunning();
-        
+
         // API is available, auto-connect
         await connectToDevice();
         console.log('Auto-connected to API on same host');

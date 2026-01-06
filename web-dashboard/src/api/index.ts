@@ -8,18 +8,21 @@ import { PoolLightAPI } from './pool-light.js';
 import { TemperatureAPI } from './temperature.js';
 import { PumpAPI } from './pump.js';
 import { ChlorinatorAPI } from './chlorinator.js';
+import { SystemAPI } from './system.js';
 
 export class PoolAutomationClient {
   public readonly light: PoolLightAPI;
   public readonly temperature: TemperatureAPI;
   public readonly pump: PumpAPI;
   public readonly chlorinator: ChlorinatorAPI;
+  public readonly system: SystemAPI;
 
   constructor(config: ESPHomeConfig) {
     this.light = new PoolLightAPI(config);
     this.temperature = new TemperatureAPI(config);
     this.pump = new PumpAPI(config);
     this.chlorinator = new ChlorinatorAPI(config);
+    this.system = new SystemAPI(config);
   }
 
   /**
@@ -35,7 +38,8 @@ export class PoolAutomationClient {
       chlorMetrics,
       chlorAlarms,
       scheduleRpms,
-      scheduleStatuses
+      scheduleStatuses,
+      systemInfo
     ] = await Promise.all([
       this.light.getLightStatus().catch(() => 'Unknown'),
       this.temperature.getTemperatures(),
@@ -45,7 +49,8 @@ export class PoolAutomationClient {
       this.chlorinator.getChlorinatorMetrics(),
       this.chlorinator.getChlorinatorAlarms(),
       this.pump.getScheduleRpms(),
-      this.pump.getScheduleStatuses()
+      this.pump.getScheduleStatuses(),
+      this.system.getSystemInfo()
     ]);
 
     return {
@@ -64,6 +69,7 @@ export class PoolAutomationClient {
         metrics: chlorMetrics,
         alarms: chlorAlarms,
       },
+      system: systemInfo,
     };
   }
 }

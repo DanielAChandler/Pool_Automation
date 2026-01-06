@@ -35,9 +35,9 @@ export interface ScheduleStatuses {
 }
 
 export class PumpAPI extends BaseESPHomeClient {
-  
+
   // ==================== Pump Status ====================
-  
+
   /**
    * Check if pump is running
    */
@@ -76,7 +76,7 @@ export class PumpAPI extends BaseESPHomeClient {
   }
 
   // ==================== Pump Mode Control ====================
-  
+
   /**
    * Set pump mode
    */
@@ -101,7 +101,7 @@ export class PumpAPI extends BaseESPHomeClient {
   }
 
   // ==================== Pump Speed Configuration ====================
-  
+
   /**
    * Set a pump speed (450-3450 RPM)
    */
@@ -135,7 +135,7 @@ export class PumpAPI extends BaseESPHomeClient {
   }
 
   // ==================== Schedule Control ====================
-  
+
   /**
    * Enable or disable auto schedule
    */
@@ -256,7 +256,7 @@ export class PumpAPI extends BaseESPHomeClient {
   }
 
   // ==================== Waterfall Control ====================
-  
+
   /**
    * Set waterfall state
    */
@@ -345,12 +345,40 @@ export class PumpAPI extends BaseESPHomeClient {
   }
 
   // ==================== Maintenance ====================
-  
+
   /**
    * Sync pump clock with system time
    */
   async syncPumpClock(): Promise<void> {
     await this.request('/button/sync_pump_clock/press', 'POST');
+  }
+
+  /**
+   * Toggle takeover mode
+   */
+  async toggleTakeoverMode(): Promise<void> {
+    await this.request('/switch/takeover_mode/toggle', 'POST');
+  }
+
+  /**
+   * Toggle waterfall auto mode
+   */
+  async toggleWaterfallAuto(): Promise<void> {
+    await this.request('/switch/waterfall__auto_/toggle', 'POST');
+  }
+
+  /**
+   * Toggle auto schedule
+   */
+  async toggleAutoSchedule(): Promise<void> {
+    await this.request('/switch/auto_schedule/toggle', 'POST');
+  }
+
+  /**
+   * Toggle off switch
+   */
+  async toggleOff(): Promise<void> {
+    await this.request('/switch/off/toggle', 'POST');
   }
 
   /**

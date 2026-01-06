@@ -26,13 +26,14 @@ async function buildBundle() {
     let html = readFileSync(join(__dirname, 'public/index.html'), 'utf8');
     const css = readFileSync(join(__dirname, 'public/styles.css'), 'utf8');
     const appJS = readFileSync(join(__dirname, 'public/app.js'), 'utf8');
-    
+
     // Read all modular API files
     const baseJS = readFileSync(join(__dirname, 'dist/api/base.js'), 'utf8');
     const poolLightJS = readFileSync(join(__dirname, 'dist/api/pool-light.js'), 'utf8');
     const temperatureJS = readFileSync(join(__dirname, 'dist/api/temperature.js'), 'utf8');
     const pumpJS = readFileSync(join(__dirname, 'dist/api/pump.js'), 'utf8');
     const chlorinatorJS = readFileSync(join(__dirname, 'dist/api/chlorinator.js'), 'utf8');
+    const systemJS = readFileSync(join(__dirname, 'dist/api/system.js'), 'utf8');
     const indexJS = readFileSync(join(__dirname, 'dist/api/index.js'), 'utf8');
     const esphomeApiJS = readFileSync(join(__dirname, 'dist/esphome-api.js'), 'utf8');
 
@@ -46,7 +47,7 @@ async function buildBundle() {
     const modifiedAppJS = appJS
         .replace(/import.*from.*['"].*esphome-api\.js['"];?\s*/g, '')
         .replace(/useProxy:\s*true,?\s*\/\/[^\n]*/g, 'useProxy: false, // Bundled version - direct connection');
-    
+
     // Combine all modules - remove all export/import statements
     const stripExportsImports = (code) => code
         // Remove full export statements first
@@ -60,22 +61,23 @@ async function buildBundle() {
         .replace(/import\s*{[^}]*}\s*from\s+['"][^'"]*['"];?\s*/g, '') // import { ... } from '...'
         .replace(/import\s+\w+\s+from\s+['"][^'"]*['"];?\s*/g, '') // import X from '...'
         .replace(/import\s+['"][^'"]*['"];?\s*/g, ''); // import '...'
-    
+
     const combinedJS = [
         stripExportsImports(baseJS),
         stripExportsImports(poolLightJS),
         stripExportsImports(temperatureJS),
         stripExportsImports(pumpJS),
         stripExportsImports(chlorinatorJS),
+        stripExportsImports(systemJS),
         stripExportsImports(indexJS),
         stripExportsImports(esphomeApiJS),
         modifiedAppJS
     ].join('\n');
-    
+
     // Debug: write combined JS to file
     writeFileSync(join(__dirname, 'build/combined.js'), combinedJS, 'utf8');
     console.log('📝 Combined JS written to build/combined.js for debugging');
-    
+
     const minifiedJSResult = await minifyJS(combinedJS, {
         compress: {
             dead_code: true,
@@ -116,7 +118,7 @@ async function buildBundle() {
     writeFileSync(outputPath, minifiedHTML, 'utf8');
 
     // Show file sizes
-    const originalSize = (html.length + css.length + appJS.length + baseJS.length + poolLightJS.length + temperatureJS.length + pumpJS.length + chlorinatorJS.length + indexJS.length + esphomeApiJS.length) / 1024;
+    const originalSize = (html.length + css.length + appJS.length + baseJS.length + poolLightJS.length + temperatureJS.length + pumpJS.length + chlorinatorJS.length + systemJS.length + indexJS.length + esphomeApiJS.length) / 1024;
     const bundledSize = minifiedHTML.length / 1024;
     const savings = ((1 - bundledSize / originalSize) * 100).toFixed(1);
 

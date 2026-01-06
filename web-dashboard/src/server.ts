@@ -29,7 +29,17 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => body += chunk);
         req.on('end', () => {
             try {
-                proxyConfig = JSON.parse(body);
+                const data = JSON.parse(body);
+                let host = String(data.host).trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+                // Remove protocol if present
+                host = host.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+                proxyConfig = {
+                    host: host,
+                    port: parseInt(data.port) || 80,
+                    auth: data.auth
+                };
+                console.log(`🔧 Proxy configured for: ${proxyConfig.host}:${proxyConfig.port}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
             } catch (error) {
@@ -43,29 +53,39 @@ const server = http.createServer((req, res) => {
     // Handle API proxy requests
     if (req.url?.startsWith('/api/proxy/')) {
         if (!proxyConfig) {
+            console.warn('⚠️ Proxy request received but proxy not configured');
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Proxy not configured' }));
             return;
         }
 
         const targetPath = req.url.replace('/api/proxy', '');
+        console.log(`📡 Proxying ${req.method} ${targetPath} to ${proxyConfig.host}:${proxyConfig.port}`);
+
+        // Sanitize headers - only forward what's needed
+        const allowedHeaders = ['authorization', 'content-type', 'content-length', 'accept'];
+        const forwardedHeaders: http.OutgoingHttpHeaders = {
+            host: `${proxyConfig.host}:${proxyConfig.port}`,
+            connection: 'close', // Use non-keep-alive for simplicity with ESPHome
+        };
+
+        for (const header of allowedHeaders) {
+            if (req.headers[header]) {
+                forwardedHeaders[header] = req.headers[header];
+            }
+        }
+
         const options = {
             hostname: proxyConfig.host,
             port: proxyConfig.port,
             path: targetPath,
             method: req.method,
-            headers: {
-                ...req.headers,
-                host: `${proxyConfig.host}:${proxyConfig.port}`,
-            } as http.OutgoingHttpHeaders,
+            headers: forwardedHeaders,
+            timeout: 10000, // 10s timeout
         };
 
-        if (proxyConfig.auth) {
-            options.headers = options.headers || {};
-            (options.headers as Record<string, string>)['Authorization'] = proxyConfig.auth;
-        }
-
         const proxyReq = http.request(options, (proxyRes) => {
+            console.log(`✅ Target response: ${proxyRes.statusCode} for ${targetPath}`);
             res.writeHead(proxyRes.statusCode || 200, {
                 'Content-Type': proxyRes.headers['content-type'] || 'application/json',
                 'Access-Control-Allow-Origin': '*',
@@ -73,10 +93,25 @@ const server = http.createServer((req, res) => {
             proxyRes.pipe(res);
         });
 
-        proxyReq.on('error', (error) => {
-            console.error('Proxy error:', error);
+        proxyReq.on('error', (error: any) => {
+            const errorMsg = error.message || 'Unknown proxy error';
+            const errorCode = error.code || 'UNKNOWN';
+            console.error(`❌ Proxy error for ${targetPath}:`, errorMsg, errorCode);
+
             res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
+            res.end(JSON.stringify({
+                error: errorMsg,
+                code: errorCode,
+                target: `${proxyConfig?.host}:${proxyConfig?.port}${targetPath}`,
+                timestamp: new Date().toISOString()
+            }));
+        });
+
+        proxyReq.on('timeout', () => {
+            console.error(`⏱️ Proxy timeout for ${targetPath}`);
+            proxyReq.destroy();
+            res.writeHead(504, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Proxy timeout' }));
         });
 
         req.pipe(proxyReq);
@@ -85,7 +120,7 @@ const server = http.createServer((req, res) => {
 
     // Default to index.html
     const filePath = req.url === '/' ? '/index.html' : (req.url || '/index.html');
-    
+
     // Serve from public directory or dist for compiled JS modules
     let fullPath;
     if (filePath.startsWith('/dist/')) {
@@ -107,7 +142,7 @@ const server = http.createServer((req, res) => {
                 res.end(`Server Error: ${err.code}`, 'utf-8');
             }
         } else {
-            res.writeHead(200, { 
+            res.writeHead(200, {
                 'Content-Type': contentType,
                 'Access-Control-Allow-Origin': '*'
             });
