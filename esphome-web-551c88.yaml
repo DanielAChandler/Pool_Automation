@@ -27,12 +27,12 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: "n4iIeFt/Mf7iU9ItsSL1HM8DUwzl9xlLBZ8cuOAxbEI="
+    key: !secret pool-controller-api-key
 
 # Allow Over-The-Air updates
 ota:
   - platform: esphome
-    password: "f91133fb8deee35feac447aa23650d81"
+    password: !secret pool-controller-ota-password
 
 wifi:
   ssid: !secret wifi_ssid
@@ -43,6 +43,18 @@ wifi:
     password: !secret ap_password
 
 captive_portal:
+
+external_components:
+  - source: components
+    components: [custom_web_handler]
+
+# Custom web handler for additional endpoints
+custom_web_handler:
+  endpoints:
+    # File endpoint - serve embedded HTML file
+    - path: /custom_page
+      content_type: text/html
+      file: Include/index.html
 
 # Enable web server for direct access
 web_server:
@@ -82,14 +94,8 @@ number:
     mode: box
 
 text:
-  - platform: template # Or other platforms like lvgl, nextion, etc.
-    name: My Input Text
-    optimistic: true
-    mode: text
-    id: my_input_text
-    initial_value: "Default Text" # Optional: set an initial value
-    # ... other configuration options as needed
 
+# column labels for schedule glance
 text_sensor:
   - platform: template
     name: start_label
@@ -110,8 +116,3 @@ text_sensor:
   - platform: template
     name: blank_label
     lambda: return{" "};
-
-
-
-
-
