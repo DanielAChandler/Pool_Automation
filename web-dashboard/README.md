@@ -134,7 +134,7 @@ Run `npm run serve` and access via `http://localhost:3000`
 import { createClient } from './esphome-api';
 
 const client = createClient({
-  host: '192.168.68.79',
+  host: 'pool-controller.local',
   port: 80,
   username: 'your-username',
   password: 'your-password',
@@ -299,8 +299,8 @@ See [src/examples.ts](src/examples.ts) for comprehensive examples including:
 ## ESPHome Device Configuration
 
 This client is designed for the Pool Automation system at:
-- **Device**: esphome-web-551c88
-- **Default IP**: 192.168.68.79
+- **Device**: pool-controller
+- **Default IP**: pool-controller.local
 - **Model**: esp32-s3-devkitc-1
 - **ESPHome Version**: 2025.11.5
 
@@ -349,8 +349,8 @@ web-dashboard/
 ## ESPHome Device Configuration
 
 This client is designed for the Pool Automation system at:
-- **Device**: esphome-web-551c88
-- **Default IP**: 192.168.68.79
+- **Device**: pool-controller
+- **Default IP**: pool-controller.local
 - **Model**: esp32-s3-devkitc-1
 - **ESPHome Version**: 2025.11.5
 

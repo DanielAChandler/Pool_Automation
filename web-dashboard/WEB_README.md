@@ -21,7 +21,7 @@
    Serve `build/index.html` from any HTTP server or ESPHome device.
 
 3. **Configure connection:**
-   - Enter your ESPHome device IP (default: 192.168.68.79)
+   - Enter your ESPHome device IP (default: pool-controller.local)
    - Enter port (default: 80)
    - Optionally enter username/password if authentication is enabled
    - Click "Connect"
@@ -167,7 +167,7 @@ The dashboard uses the ESPHome REST API. You can also use the TypeScript client 
 import { createClient } from './dist/esphome-api.js';
 
 const client = createClient({
-  host: '192.168.68.79',
+  host: 'pool-controller.local',
   port: 80,
   useProxy: false  // true for dev server, false for direct connection
 });

@@ -53,7 +53,7 @@ Core HTTP client functionality used by all modules.
 import { createPoolClient } from './api/index.js';
 
 const pool = createPoolClient({
-  host: '192.168.68.79',
+  host: 'pool-controller.local',
   port: 80,
   username: 'admin',
   password: 'password',
@@ -84,7 +84,7 @@ import { PoolLightAPI } from './api/pool-light.js';
 import { TemperatureAPI } from './api/temperature.js';
 
 const config = {
-  host: '192.168.68.79',
+  host: 'pool-controller.local',
   useProxy: false
 };
 
