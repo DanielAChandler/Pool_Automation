@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pool Automation Dashboard</title>
+    <title>Pool Controller Dashboard</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -12,7 +12,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>🌊 Pool Automation Dashboard</h1>
+            <h1>🌊 Pool Controller Dashboard</h1>
             <div style="font-size: 0.8em; color: #fff; opacity: 0.7; margin-top: 0.5em;">Build: __BUILD_TIMESTAMP__
             </div>
             <div id="connection-status" class="status-disconnected" onclick="toggleConfiguration()"
@@ -310,49 +310,6 @@
                 </div>
             </section>
 
-            <!-- Alarms -->
-            <section class="card card-compact" id="alarms-section" style="display: none;">
-                <div class="section-header">
-                    <h2>⚠️ Alarms</h2>
-                    <button class="btn-icon-refresh" onclick="refreshAlarms()" title="Refresh"><i
-                            class="mdi mdi-refresh"></i></button>
-                </div>
-                <div class="alarm-grid grid-4-col no-icons">
-                    <div class="alarm-item" id="alarm-no-flow">
-                        <span class="alarm-icon"></span>
-                        <span>No Flow</span>
-                    </div>
-                    <div class="alarm-item" id="alarm-low-salt">
-                        <span class="alarm-icon"></span>
-                        <span>Low Salt</span>
-                    </div>
-                    <div class="alarm-item" id="alarm-high-salt">
-                        <span class="alarm-icon"></span>
-                        <span>High Salt</span>
-                    </div>
-                    <div class="alarm-item" id="alarm-clean-cell">
-                        <span class="alarm-icon"></span>
-                        <span>Clean Cell Required</span>
-                    </div>
-                    <div class="alarm-item" id="alarm-high-current">
-                        <span class="alarm-icon"></span>
-                        <span>High Current</span>
-                    </div>
-                    <div class="alarm-item" id="alarm-low-voltage">
-                        <span class="alarm-icon"></span>
-                        <span>Low Voltage</span>
-                    </div>
-                    <div class="alarm-item" id="alarm-low-temp">
-                        <span class="alarm-icon"></span>
-                        <span>Low Temperature</span>
-                    </div>
-                    <div class="alarm-item" id="alarm-check-pcb">
-                        <span class="alarm-icon"></span>
-                        <span>Check PCB</span>
-                    </div>
-                </div>
-            </section>
-
             <!-- Chlorinator -->
             <section class="card card-compact" id="chlorinator-section" style="display: none;">
                 <div class="section-header">
@@ -396,6 +353,49 @@
                         <span>Takeover Mode</span>
                         <button id="switch-takeover" class="btn btn-toggle"
                             onclick="toggleSwitch('takeover_mode', this)">-</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Alarms -->
+            <section class="card card-compact" id="alarms-section" style="display: none;">
+                <div class="section-header">
+                    <h2>⚠️ Alarms</h2>
+                    <button class="btn-icon-refresh" onclick="refreshAlarms()" title="Refresh"><i
+                            class="mdi mdi-refresh"></i></button>
+                </div>
+                <div class="alarm-grid grid-4-col no-icons">
+                    <div class="alarm-item" id="alarm-no-flow">
+                        <span class="alarm-icon"></span>
+                        <span>No Flow</span>
+                    </div>
+                    <div class="alarm-item" id="alarm-low-salt">
+                        <span class="alarm-icon"></span>
+                        <span>Low Salt</span>
+                    </div>
+                    <div class="alarm-item" id="alarm-high-salt">
+                        <span class="alarm-icon"></span>
+                        <span>High Salt</span>
+                    </div>
+                    <div class="alarm-item" id="alarm-clean-cell">
+                        <span class="alarm-icon"></span>
+                        <span>Clean Cell Required</span>
+                    </div>
+                    <div class="alarm-item" id="alarm-high-current">
+                        <span class="alarm-icon"></span>
+                        <span>High Current</span>
+                    </div>
+                    <div class="alarm-item" id="alarm-low-voltage">
+                        <span class="alarm-icon"></span>
+                        <span>Low Voltage</span>
+                    </div>
+                    <div class="alarm-item" id="alarm-low-temp">
+                        <span class="alarm-icon"></span>
+                        <span>Low Temperature</span>
+                    </div>
+                    <div class="alarm-item" id="alarm-check-pcb">
+                        <span class="alarm-icon"></span>
+                        <span>Check PCB</span>
                     </div>
                 </div>
             </section>
